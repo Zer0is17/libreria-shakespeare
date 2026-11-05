@@ -172,7 +172,7 @@ const LIBROS = [
 
 const INFO = {
   direccion: 'Hidalgo #20, Centro, 45300 Tala, Jal.',
-  correo: 'LibreriaShakespeare@gmail.com',
+  correo: 'libreria.shakespeare20@gmail.com',
   telefono: '+52 33 2204 8892',
   horario: 'Lunes a viernes, 9:30 a 3:00 h',
 }
