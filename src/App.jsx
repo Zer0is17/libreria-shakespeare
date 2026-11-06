@@ -1,4 +1,5 @@
 import './App.css'
+import { guardarPedidoEnLaNube, reenviarPendientes } from './nube.js'
 import { useEffect, useRef, useState } from 'react'
 import logo from './assets/logo-encabezado.svg'
 import portadaPrincipito from './assets/el-principito.jpg'
@@ -12,7 +13,7 @@ import portadaCorazon from './assets/el-corazon-del-rey.jpg'
 import portadaEstrellas from './assets/hasta-que-nos-quedemos-sin-estrellas.jpg'
 import portadaInvisible from './assets/invisible.jpg'
 import portadaHarry from './assets/harry-potter-y-la-piedra-filosofal.jpg'
-import portadaCien from './assets/cien-años-de-soledad.jpg'
+import portadaCien from './assets/cien-anos-de-soledad.jpg'
 import portadaAlicia from './assets/alicia-en-el-pais-de-las-maravillas.jpg'
 import portadaSangre from './assets/de-sangre-y-cenizas.jpg'
 import portadaMujercitas from './assets/mujercitas.jpg'
@@ -733,6 +734,11 @@ export default function App() {
 
   useEffect(() => () => clearTimeout(temporizadorEstado.current), [])
 
+  /* Reintenta enviar pedidos que no se pudieron guardar por falta de conexión */
+  useEffect(() => {
+    reenviarPendientes()
+  }, [])
+
   const cantidadTotal = carrito.reduce((s, i) => s + i.cantidad, 0)
   const total = carrito.reduce((s, i) => s + libroPorId(i.id).precio * i.cantidad, 0)
 
@@ -765,6 +771,7 @@ export default function App() {
       fecha: new Date().toISOString(),
       cliente: datos,
       libros: carrito.map((i) => ({
+        id: i.id,
         titulo: libroPorId(i.id).titulo,
         cantidad: i.cantidad,
         precio: libroPorId(i.id).precio,
@@ -773,6 +780,7 @@ export default function App() {
     }
     guardar('bookplace-pedidos', leer('bookplace-pedidos', []).concat(pedido))
     guardar('bookplace-ultima-compra', pedido)
+    guardarPedidoEnLaNube(pedido) // envía el pedido a la base de datos (no bloquea la compra)
     setUltimaCompra(pedido)
     setCarrito([])
     irA('#/compra-realizada')
