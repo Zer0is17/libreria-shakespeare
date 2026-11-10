@@ -1,6 +1,6 @@
 import './App.css'
-import { guardarPedidoEnLaNube, reenviarPendientes } from './nube.js'
-import { useEffect, useRef, useState } from 'react'
+import { cargarLibros, guardarPedidoEnLaNube, nubeActiva, reenviarPendientes } from './nube.js'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import logo from './assets/logo-encabezado.svg'
 import portadaPrincipito from './assets/el-principito.jpg'
 import portadaOrgullo from './assets/orgullo-y-prejuicio.jpg'
@@ -13,11 +13,13 @@ import portadaCorazon from './assets/el-corazon-del-rey.jpg'
 import portadaEstrellas from './assets/hasta-que-nos-quedemos-sin-estrellas.jpg'
 import portadaInvisible from './assets/invisible.jpg'
 import portadaHarry from './assets/harry-potter-y-la-piedra-filosofal.jpg'
-import portadaCien from './assets/cien-años-de-soledad.jpg'
+import portadaCien from './assets/cien-anos-de-soledad.jpg'
 import portadaAlicia from './assets/alicia-en-el-pais-de-las-maravillas.jpg'
 import portadaSangre from './assets/de-sangre-y-cenizas.jpg'
 import portadaMujercitas from './assets/mujercitas.jpg'
 
+/* Catálogo de respaldo: se usa si no hay conexión con la base de datos.
+   El catálogo real se edita desde el panel de administración. */
 const LIBROS = [
   {
     id: 'el-principito',
@@ -173,13 +175,26 @@ const LIBROS = [
 
 const INFO = {
   direccion: 'Hidalgo #20, Centro, 45300 Tala, Jal.',
-  correo: 'libreria.shakespeare20@gmail.com',
+  correo: 'LibreriaShakespeare@gmail.com',
   telefono: '+52 33 2204 8892',
   horario: 'Lunes a viernes, 9:30 a 3:00 h',
 }
 
-/* Categorías del catálogo (cada libro indica las suyas en "categorias") */
-const CATEGORIAS = ['Clásicos', 'Fantasía', 'Romance', 'Juvenil', 'Biografías']
+/* Las categorías salen de los libros; estas van primero y en este orden */
+const CATEGORIAS_ORDEN = ['Clásicos', 'Fantasía', 'Romance', 'Juvenil', 'Biografías']
+
+function categoriasDe(libros) {
+  const posicion = (c) => (CATEGORIAS_ORDEN.includes(c) ? CATEGORIAS_ORDEN.indexOf(c) : CATEGORIAS_ORDEN.length)
+  return [...new Set(libros.flatMap((l) => l.categorias || []))].sort(
+    (a, b) => posicion(a) - posicion(b) || a.localeCompare(b, 'es'),
+  )
+}
+
+/* Catálogo disponible para todas las páginas */
+const CatalogoContext = createContext(null)
+function useCatalogo() {
+  return useContext(CatalogoContext)
+}
 
 /* Información de entrega y pago que se muestra al comprar (cámbiala por la real) */
 const TIEMPO_ENTREGA = { min: 3, max: 5 } // días hábiles
@@ -190,7 +205,6 @@ const NOTAS_PAGO = {
 
 const dinero = (n) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const normalizar = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-const libroPorId = (id) => LIBROS.find((l) => l.id === id)
 
 function sumarDiasHabiles(fecha, dias) {
   const d = new Date(fecha)
@@ -306,9 +320,10 @@ function Tarjeta({ libro, onAgregar }) {
 }
 
 function Filtros({ valor, onCambio }) {
+  const { categorias } = useCatalogo()
   return (
     <div className="filtros" role="group" aria-label="Filtrar por categoría">
-      {['Todos', ...CATEGORIAS].map((c) => (
+      {['Todos', ...categorias].map((c) => (
         <button
           key={c}
           type="button"
@@ -343,9 +358,10 @@ function Buscador({ valor, onCambio, onEnviar, inputRef }) {
 
 /* ---------- Páginas ---------- */
 function PaginaInicio({ onAgregar }) {
+  const { libros } = useCatalogo()
   const [q, setQ] = useState('')
   const [categoria, setCategoria] = useState('Todos')
-  const visibles = categoria === 'Todos' ? LIBROS : LIBROS.filter((l) => l.categorias.includes(categoria))
+  const visibles = categoria === 'Todos' ? libros : libros.filter((l) => l.categorias.includes(categoria))
 
   function buscar(e) {
     e.preventDefault()
@@ -373,6 +389,7 @@ function PaginaInicio({ onAgregar }) {
 }
 
 function PaginaBusqueda({ texto, onAgregar }) {
+  const { libros } = useCatalogo()
   const [q, setQ] = useState(texto || '')
   const [categoria, setCategoria] = useState('Todos')
   const entrada = useRef(null)
@@ -382,7 +399,7 @@ function PaginaBusqueda({ texto, onAgregar }) {
   }, [texto])
 
   const consulta = normalizar(q.trim())
-  const encontrados = LIBROS.filter(
+  const encontrados = libros.filter(
     (l) =>
       (normalizar(l.titulo).includes(consulta) || normalizar(l.autor).includes(consulta)) &&
       (categoria === 'Todos' || l.categorias.includes(categoria)),
@@ -418,8 +435,9 @@ function PaginaBusqueda({ texto, onAgregar }) {
 }
 
 function PaginaDetalle({ id, onAgregar }) {
+  const { libroPorId, listo } = useCatalogo()
   const l = libroPorId(id)
-  if (!l) return <Pagina404 />
+  if (!l) return listo ? <Pagina404 /> : <p className="vacio">Cargando…</p>
 
   return (
     <>
@@ -444,6 +462,7 @@ function PaginaDetalle({ id, onAgregar }) {
 }
 
 function PaginaCarrito({ carrito, total, onCambiar, onQuitar }) {
+  const { libroPorId } = useCatalogo()
   if (carrito.length === 0) {
     return (
       <>
@@ -513,6 +532,7 @@ function PaginaCarrito({ carrito, total, onCambiar, onQuitar }) {
 }
 
 function PaginaCompra({ carrito, total, onConfirmar }) {
+  const { libroPorId } = useCatalogo()
   const enviado = useRef(false)
   const vacio = carrito.length === 0
 
@@ -722,15 +742,55 @@ const ENLACES = [
 export default function App() {
   const { pag, arg } = useRuta()
 
-  const [carrito, setCarrito] = useState(() =>
-    leer('bookplace-carrito-v2', []).filter((i) => libroPorId(i.id)),
+  /* Catálogo: se muestra al instante el último guardado (o el de respaldo) y se actualiza desde la base de datos */
+  const [libros, setLibros] = useState(() => {
+    const guardado = leer('bookplace-catalogo', null)
+    return Array.isArray(guardado) && guardado.length > 0 ? guardado : LIBROS
+  })
+  const [catalogoListo, setCatalogoListo] = useState(!nubeActiva)
+
+  useEffect(() => {
+    if (!nubeActiva) return undefined
+    let activo = true
+    cargarLibros().then((lista) => {
+      if (!activo) return
+      if (lista) {
+        setLibros(lista)
+        guardar('bookplace-catalogo', lista)
+      }
+      setCatalogoListo(true)
+    })
+    return () => {
+      activo = false
+    }
+  }, [])
+
+  const catalogo = useMemo(
+    () => ({
+      libros,
+      libroPorId: (id) => libros.find((l) => l.id === id),
+      categorias: categoriasDe(libros),
+      listo: catalogoListo,
+    }),
+    [libros, catalogoListo],
   )
+  const { libroPorId } = catalogo
+
+  const [carritoGuardado, setCarrito] = useState(() => {
+    const c = leer('bookplace-carrito-v2', [])
+    return Array.isArray(c) ? c : []
+  })
+  /* Solo cuentan los libros que existen en el catálogo actual */
+  const carrito = useMemo(() => carritoGuardado.filter((i) => libros.some((l) => l.id === i.id)), [carritoGuardado, libros])
+  useEffect(() => {
+    if (catalogoListo && carrito.length !== carritoGuardado.length) setCarrito(carrito)
+  }, [catalogoListo, carrito, carritoGuardado.length])
   const [ultimaCompra, setUltimaCompra] = useState(() => leer('bookplace-ultima-compra', null))
   const [estado, setEstado] = useState('')
   const temporizadorEstado = useRef(null)
   useEffect(() => {
-    guardar('bookplace-carrito-v2', carrito)
-  }, [carrito])
+    guardar('bookplace-carrito-v2', carritoGuardado)
+  }, [carritoGuardado])
 
   useEffect(() => () => clearTimeout(temporizadorEstado.current), [])
 
@@ -799,6 +859,7 @@ export default function App() {
   else contenido = <Pagina404 />
 
   return (
+    <CatalogoContext.Provider value={catalogo}>
     <div className={`app${pag !== '' ? ' compacto' : ''}`}>
       <header>
         <nav aria-label="Principal">
@@ -864,5 +925,6 @@ export default function App() {
         </div>
       </footer>
     </div>
+    </CatalogoContext.Provider>
   )
 }
