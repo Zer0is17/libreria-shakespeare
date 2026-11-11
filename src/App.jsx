@@ -132,7 +132,7 @@ const LIBROS = [
     descripcion: 'Harry Potter crece sin saber que es un mago hasta que, al cumplir once años, recibe una invitación al Colegio Hogwarts de Magia y Hechicería. Allí encontrará amigos, secretos y el comienzo de una aventura que cambiará su vida.',
   },
   {
-    id: 'cien-anos-de-soledad',
+    id: 'cien-años-de-soledad',
     titulo: 'Cien años de soledad',
     categorias: ['Clásicos'],
     autor: 'Gabriel García Márquez',
