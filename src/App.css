@@ -461,3 +461,44 @@ header h1 a { display: inline-block; line-height: 0; }
   .detalle .categorias { justify-content: center; }
   .pedido-secciones { grid-template-columns: 1fr; }
 }
+
+/* Seguimiento de pedido */
+.mensaje-aviso {
+  background: var(--salvia-oscuro);
+  color: var(--crema-clara);
+  border-radius: 12px;
+  padding: .8rem 1rem;
+  text-align: center;
+  max-width: 560px;
+  margin: 1.25rem auto 0;
+  line-height: 1.5;
+}
+.aviso.seguimiento { margin-top: 2rem; }
+.seguimiento-folio { font-family: var(--titulo); font-weight: 600; font-size: 1.5rem; }
+.seguimiento-mensaje { font-size: 1.1rem; margin: 1rem 0 0; }
+.pasos {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .5rem;
+  margin: 1.5rem 0 .5rem;
+}
+.pasos li { display: flex; flex-direction: column; align-items: center; gap: .4rem; color: var(--texto-suave); position: relative; }
+.pasos li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 1.1rem;
+  left: calc(50% + 1.4rem);
+  width: calc(100% - 2.8rem);
+  height: 2px;
+  background: var(--claro);
+}
+.pasos li.hecho:not(:last-child)::after { background: var(--salvia-oscuro); }
+.paso-punto {
+  width: 2.2rem; height: 2.2rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--claro); color: var(--salvia-profundo); font-weight: 600;
+}
+.pasos li.hecho .paso-punto, .pasos li.actual .paso-punto { background: var(--salvia-oscuro); color: var(--crema-clara); }
+.pasos li.actual { font-weight: 600; color: var(--texto); }
+@media (max-width: 640px) { .pasos { font-size: .9rem; } }

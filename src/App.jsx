@@ -1,5 +1,5 @@
 import './App.css'
-import { cargarLibros, guardarPedidoEnLaNube, nubeActiva, reenviarPendientes } from './nube.js'
+import { cargarLibros, consultarPedido, guardarPedidoEnLaNube, nubeActiva, reenviarPendientes } from './nube.js'
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import logo from './assets/logo-encabezado.svg'
 import portadaPrincipito from './assets/el-principito.jpg'
@@ -13,7 +13,7 @@ import portadaCorazon from './assets/el-corazon-del-rey.jpg'
 import portadaEstrellas from './assets/hasta-que-nos-quedemos-sin-estrellas.jpg'
 import portadaInvisible from './assets/invisible.jpg'
 import portadaHarry from './assets/harry-potter-y-la-piedra-filosofal.jpg'
-import portadaCien from './assets/cien-años-de-soledad.jpg'
+import portadaCien from './assets/cien-anos-de-soledad.jpg'
 import portadaAlicia from './assets/alicia-en-el-pais-de-las-maravillas.jpg'
 import portadaSangre from './assets/de-sangre-y-cenizas.jpg'
 import portadaMujercitas from './assets/mujercitas.jpg'
@@ -132,7 +132,7 @@ const LIBROS = [
     descripcion: 'Harry Potter crece sin saber que es un mago hasta que, al cumplir once años, recibe una invitación al Colegio Hogwarts de Magia y Hechicería. Allí encontrará amigos, secretos y el comienzo de una aventura que cambiará su vida.',
   },
   {
-    id: 'cien-años-de-soledad',
+    id: 'cien-anos-de-soledad',
     titulo: 'Cien años de soledad',
     categorias: ['Clásicos'],
     autor: 'Gabriel García Márquez',
@@ -205,6 +205,13 @@ const NOTAS_PAGO = {
 
 const dinero = (n) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const normalizar = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+/* Folio del pedido: LS- y 8 caracteres al azar (sin letras que se confunden) */
+function generarFolio() {
+  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(8))
+  return 'LS-' + Array.from(bytes, (b) => letras[b % letras.length]).join('')
+}
 
 function sumarDiasHabiles(fecha, dias) {
   const d = new Date(fecha)
@@ -668,9 +675,166 @@ function PaginaCompraRealizada({ compra }) {
       </div>
 
       <div className="acciones">
-        <a className="boton" href="#/">Volver al inicio</a>
+        {compra.numero && <a className="boton" href={`#/seguimiento/${compra.numero}`}>Seguir mi pedido</a>}
+        <a className="boton claro" href="#/">Volver al inicio</a>
       </div>
     </section>
+  )
+}
+
+/* ---------- Seguimiento de pedidos ---------- */
+const PASOS = ['Pedido recibido', 'Enviado', 'Entregado']
+const PASO_ACTUAL = { pendiente: 0, enviado: 1, entregado: 2 }
+const MENSAJE_ESTADO = {
+  pendiente: 'Recibimos tu pedido y lo estamos preparando.',
+  enviado: 'Tu pedido va en camino.',
+  entregado: 'Tu pedido fue entregado. ¡Disfruta tu lectura!',
+  cancelado: 'Este pedido fue cancelado. Si tienes dudas, escríbenos.',
+}
+
+function normalizarFolio(texto) {
+  const f = texto.trim().toUpperCase().replace(/\s+/g, '')
+  return f && !f.startsWith('LS-') ? 'LS-' + f : f
+}
+
+function PaginaSeguimiento({ folioInicial }) {
+  const [folio, setFolio] = useState(folioInicial || '')
+  const [fase, setFase] = useState(folioInicial ? 'cargando' : 'inicial') // inicial | cargando | ok | noexiste | error
+  const [pedido, setPedido] = useState(null)
+
+  async function consultar(texto) {
+    const f = normalizarFolio(texto)
+    if (!f) return
+    setFase('cargando')
+    try {
+      const r = await consultarPedido(f)
+      setPedido(r)
+      setFase(r ? 'ok' : 'noexiste')
+    } catch {
+      setFase('error')
+    }
+  }
+
+  useEffect(() => {
+    if (folioInicial) consultar(folioInicial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folioInicial])
+
+  function enviar(e) {
+    e.preventDefault()
+    const f = normalizarFolio(folio)
+    if (!f) return
+    setFolio(f)
+    if (f === normalizarFolio(folioInicial || '')) consultar(f)
+    else irA('#/seguimiento/' + encodeURIComponent(f))
+  }
+
+  const fecha = pedido ? new Date(pedido.creado) : null
+  const paso = pedido ? PASO_ACTUAL[pedido.estado] : -1
+  const enCamino = pedido && (pedido.estado === 'pendiente' || pedido.estado === 'enviado')
+
+  return (
+    <>
+      <h2>Seguimiento de pedido</h2>
+      <p className="texto-centro">Escribe el folio que recibiste al comprar para ver cómo va tu pedido.</p>
+
+      <form className="formulario" onSubmit={enviar}>
+        <label>
+          Folio del pedido
+          <input
+            type="text"
+            value={folio}
+            onChange={(e) => setFolio(e.target.value)}
+            placeholder="LS-XXXXXXXX"
+            autoComplete="off"
+            autoCapitalize="characters"
+            required
+          />
+        </label>
+        <button type="submit" className="boton" disabled={fase === 'cargando'}>
+          {fase === 'cargando' ? 'Buscando…' : 'Consultar'}
+        </button>
+      </form>
+
+      <div aria-live="polite">
+        {fase === 'noexiste' && (
+          <p className="mensaje-aviso">No encontramos ese folio. Revisa que esté escrito igual que en tu confirmación de compra.</p>
+        )}
+        {fase === 'error' && (
+          <p className="mensaje-aviso">No pudimos consultar tu pedido en este momento. Inténtalo de nuevo en unos minutos.</p>
+        )}
+      </div>
+
+      {fase === 'ok' && pedido && (
+        <section className="aviso pedido seguimiento">
+          <h3 className="seguimiento-folio">Pedido {pedido.numero}</h3>
+          <p className="pedido-folio">{fechaLarga(fecha)}</p>
+
+          {pedido.estado !== 'cancelado' && (
+            <ol className="pasos" aria-label="Progreso del pedido">
+              {PASOS.map((nombre, i) => (
+                <li
+                  key={nombre}
+                  className={`${i < paso || pedido.estado === 'entregado' ? 'hecho' : ''} ${i === paso ? 'actual' : ''}`.trim()}
+                  aria-current={i === paso ? 'step' : undefined}
+                >
+                  <span className="paso-punto" aria-hidden="true">{i < paso || pedido.estado === 'entregado' ? '✓' : i + 1}</span>
+                  <span>{nombre}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <p className="seguimiento-mensaje">{MENSAJE_ESTADO[pedido.estado]}</p>
+
+          <div className="pedido-secciones">
+            <section className="pedido-bloque">
+              <h3>Procedencia del envío</h3>
+              <p>{pedido.origen ? <strong>{pedido.origen}</strong> : 'Por confirmar. Te mostraremos desde dónde se envía en cuanto lo tengamos.'}</p>
+            </section>
+
+            {enCamino && (
+              <section className="pedido-bloque">
+                <h3>Entrega estimada</h3>
+                <p>
+                  Entre el <strong>{fechaCorta(sumarDiasHabiles(fecha, TIEMPO_ENTREGA.min))}</strong> y el{' '}
+                  <strong>{fechaCorta(sumarDiasHabiles(fecha, TIEMPO_ENTREGA.max))}</strong>.
+                </p>
+                <p>Fechas aproximadas.</p>
+              </section>
+            )}
+
+            {(pedido.guia || pedido.seguimiento_url) && (
+              <section className="pedido-bloque">
+                <h3>Guía de rastreo</h3>
+                {pedido.guia && <p><strong>{pedido.guia}</strong></p>}
+                {pedido.seguimiento_url && (
+                  <p>
+                    <a href={pedido.seguimiento_url} target="_blank" rel="noopener noreferrer">Rastrear mi paquete</a>
+                  </p>
+                )}
+              </section>
+            )}
+
+            <section className="pedido-bloque">
+              <h3>Libros del pedido</h3>
+              <ul className="resumen">
+                {(pedido.libros || []).map((l, i) => (
+                  <li key={i}>
+                    <span>{l.titulo} × {l.cantidad}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+
+          <p className="pedido-folio">
+            ¿Dudas? Escríbenos a <a href={`mailto:${INFO.correo}`}>{INFO.correo}</a> o llámanos al{' '}
+            <a href={`tel:${INFO.telefono.replace(/[^\d+]/g, '')}`}>{INFO.telefono}</a>.
+          </p>
+        </section>
+      )}
+    </>
   )
 }
 
@@ -736,6 +900,7 @@ function Pagina404() {
 
 const ENLACES = [
   { ruta: 'busqueda', href: '#/busqueda', texto: 'Buscar' },
+  { ruta: 'seguimiento', href: '#/seguimiento', texto: 'Seguimiento' },
   { ruta: 'nosotros', alias: 'contacto', href: '#/nosotros', texto: 'Sobre nosotros' },
 ]
 
@@ -827,7 +992,7 @@ export default function App() {
 
   function confirmarCompra(datos) {
     const pedido = {
-      numero: 'LS-' + Date.now().toString(36).toUpperCase().slice(-6),
+      numero: generarFolio(),
       fecha: new Date().toISOString(),
       cliente: datos,
       libros: carrito.map((i) => ({
@@ -855,6 +1020,7 @@ export default function App() {
   else if (pag === 'compra')
     contenido = <PaginaCompra carrito={carrito} total={total} onConfirmar={confirmarCompra} />
   else if (pag === 'compra-realizada') contenido = <PaginaCompraRealizada compra={ultimaCompra} />
+  else if (pag === 'seguimiento') contenido = <PaginaSeguimiento key={arg ?? ''} folioInicial={arg} />
   else if (pag === 'nosotros' || pag === 'contacto') contenido = <PaginaNosotros />
   else contenido = <Pagina404 />
 
@@ -903,6 +1069,7 @@ export default function App() {
             <ul className="pie-lista">
               <li><a href="#/">Inicio</a></li>
               <li><a href="#/busqueda">Buscar libros</a></li>
+              <li><a href="#/seguimiento">Seguimiento de pedido</a></li>
               <li><a href="#/nosotros">Sobre nosotros</a></li>
               <li><a href="#/carrito">Carrito</a></li>
             </ul>

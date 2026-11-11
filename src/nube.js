@@ -12,6 +12,17 @@ function cabecerasLectura() {
   return h
 }
 
+/* Seguimiento: devuelve los datos del envío de un folio, o null si no existe */
+export async function consultarPedido(folio) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/consultar_pedido`, {
+    method: 'POST',
+    headers: { ...cabecerasLectura(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_numero: folio }),
+  })
+  if (!r.ok) throw new Error('HTTP ' + r.status)
+  return (await r.json()) || null
+}
+
 function aLibro(f) {
   return {
     id: f.id,
