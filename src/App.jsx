@@ -132,7 +132,7 @@ const LIBROS = [
     descripcion: 'Harry Potter crece sin saber que es un mago hasta que, al cumplir once años, recibe una invitación al Colegio Hogwarts de Magia y Hechicería. Allí encontrará amigos, secretos y el comienzo de una aventura que cambiará su vida.',
   },
   {
-    id: 'cien-años-de-soledad',
+    id: 'cien-anos-de-soledad',
     titulo: 'Cien años de soledad',
     categorias: ['Clásicos'],
     autor: 'Gabriel García Márquez',
@@ -788,10 +788,19 @@ function PaginaSeguimiento({ folioInicial }) {
           <p className="seguimiento-mensaje">{MENSAJE_ESTADO[pedido.estado]}</p>
 
           <div className="pedido-secciones">
-            <section className="pedido-bloque">
-              <h3>Procedencia del envío</h3>
-              <p>{pedido.origen ? <strong>{pedido.origen}</strong> : 'Por confirmar. Te mostraremos desde dónde se envía en cuanto lo tengamos.'}</p>
-            </section>
+            {pedido.estado === 'cancelado' && pedido.motivo_cancelacion && (
+              <section className="pedido-bloque ancho">
+                <h3>Motivo de la cancelación</h3>
+                <p>{pedido.motivo_cancelacion}</p>
+              </section>
+            )}
+
+            {(pedido.estado !== 'cancelado' || pedido.origen) && (
+              <section className="pedido-bloque">
+                <h3>Procedencia del envío</h3>
+                <p>{pedido.origen ? <strong>{pedido.origen}</strong> : 'Por confirmar. Te mostraremos desde dónde se envía en cuanto lo tengamos.'}</p>
+              </section>
+            )}
 
             {enCamino && (
               <section className="pedido-bloque">
